@@ -48,7 +48,9 @@
                         <module>itop-welcome-itil</module>
                         <module>itop-legacy-search-base</module>
                         <module>molkobain-background-tasks-control-center</module>
+                        <module>steffunky-backoffice-bluemoon-theme</module>
                         <module>sv-documents-folder</module>
+                        <module>teemip-branding</module>
                     </modules>
                     <mandatory>true</mandatory>
                 </choice>
