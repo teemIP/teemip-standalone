@@ -14,7 +14,7 @@ teemIP's documentation can be found at: https://wiki.teemip.com.
 iTop's documentation is available as a Wiki at: https://www.itophub.io/wiki/page.
 
 teemIP is released under the AGPL (v3) license. (Check license.txt in this directory).
-The source code of teemIP can be found on GitHub: https://github.com/TeemIp
+The source code of teemIP can be found on GitHub: https://github.com/teemIP
 
 Special Thanks To:
 ------------------
@@ -62,7 +62,7 @@ Community support
 -----------------
 Questions, bug reports and feature requests can be submitted via:
 - The teemIP tickets tracker: https://sourceforge.net/p/teemip/tickets/
-- GitHub issues: https://github.com/TeemIp
+- GitHub issues: https://github.com/teemIP
 
 Commercial support
 ------------------

@@ -3,13 +3,13 @@
     <steps type="array">
         <step>
             <title>Configuration Management options</title>
-            <description><![CDATA[<h2>The options below allow you to configure the type of elements that are to be managed inside TeemIp's CMDB.</h2>]]></description>
+            <description><![CDATA[<h2>The options below allow you to configure the type of elements that are to be managed inside teemIP's CMDB.</h2>]]></description>
             <banner>/images/icons/icons8-apps-tab.svg</banner>
             <options type="array">
                 <choice>
                     <extension_code>itop-config-mgmt-core</extension_code>
                     <title>Configuration Management Core</title>
-                    <description>All the base objects that are mandatory in the TeemIp CMDB: Organizations, Locations, Teams, Persons, etc.</description>
+                    <description>All the base objects that are mandatory in the teemIP CMDB: Organizations, Locations, Teams, Persons, etc.</description>
                     <modules type="array">
                         <module>authent-token</module>
                         <module>combodo-anonymizer</module>
@@ -126,13 +126,13 @@
         </step>
         <step>
             <title>IP, DNS and DHCP Management options</title>
-            <description><![CDATA[<h2>The options below allow you to set the IP, DNS and DHCP capabilities of TeemIp.</h2>]]></description>
+            <description><![CDATA[<h2>The options below allow you to set the IP, DNS and DHCP capabilities of teemIP.</h2>]]></description>
             <banner>/datamodels/2.x/teemip-core-ip-mgmt/teemip-ip-mgmt/asset/img/icons8-rj45-48.png</banner>
             <options type="array">
                 <choice>
                     <extension_code>teemip-ip-mgmt-core</extension_code>
                     <title>IPv4 and IPv6 Management</title>
-                    <description>By default, TeemIp manages IPv4 and IPv6 spaces.</description>
+                    <description>By default, teemIP manages IPv4 and IPv6 spaces.</description>
                     <modules type="array">
                         <module>teemip-ip-mgmt</module>
                         <module>teemip-ipv6-mgmt</module>
@@ -147,7 +147,7 @@
                 <choice>
                     <extension_code>teemip-ip-discovery</extension_code>
                     <title>IP Discovery</title>
-                    <description>Discover active IPs on networks. This extension works in conjunction with IP Discovery Collectors installed outside TeemIp.</description>
+                    <description>Discover active IPs on networks. This extension works in conjunction with IP Discovery Collectors installed outside teemIP.</description>
                     <modules type="array">
                         <module>teemip-ip-discovery</module>
                     </modules>
@@ -208,7 +208,7 @@
                 <choice>
                     <extension_code>teemip-ticket-mgmt-none</extension_code>
                     <title>No Ticket Management</title>
-                    <description>Don't manage tickets in TeemIp</description>
+                    <description>Don't manage tickets in teemIP</description>
                     <modules type="array">
                     </modules>
                     <default>true</default>

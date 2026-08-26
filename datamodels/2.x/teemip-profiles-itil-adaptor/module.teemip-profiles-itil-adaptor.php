@@ -1,16 +1,16 @@
 <?php
 /*
- * @copyright   Copyright (C) 2010-2025 TeemIp
+ * @copyright   Copyright (C) 2010-2026 teemIP
  * @license     http://opensource.org/licenses/AGPL-3.0
  */
 
 SetupWebPage::AddModule(
 	__FILE__,
-	'teemip-profiles-itil-adaptor/3.2.0',
+	'teemip-profiles-itil-adaptor/3.2.1',
 	array(
 		// Identification
 		//
-		'label' => 'TeemIp adaptor for iTop ITIL Profiles',
+		'label' => 'teemIP adaptor for iTop ITIL Profiles',
 		'category' => 'create_profiles',
 
 		// Setup

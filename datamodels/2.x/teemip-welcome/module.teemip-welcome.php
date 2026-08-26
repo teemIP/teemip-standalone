@@ -10,8 +10,8 @@ SetupWebPage::AddModule(
 	array(
 		// Identification
 		//
-		'label' => 'teemIP skin',
-		'category' => 'skin',
+		'label' => 'teemIP welcome menu',
+		'category' => 'business',
 		
 		// Setup
 		//
