@@ -7,7 +7,6 @@
 
 namespace Combodo\iTop\Controller;
 
-use Combodo\iTop\Application\WebPage\AjaxPage;
 use ApplicationContext;
 use ApplicationMenu;
 use AttributeLinkedSet;
@@ -21,7 +20,8 @@ use CMDBObjectSet;
 use CMDBSource;
 use Combodo\iTop\Application\UI\Base\Component\DataTable\DataTableSettings;
 use Combodo\iTop\Application\UI\Base\Component\DataTable\DataTableUIBlockFactory;
-use Combodo\iTop\Application\UI\Base\Layout\Object\ObjectSummary;
+use Combodo\iTop\Application\WebPage\AjaxPage;
+use Combodo\iTop\Application\WebPage\JsonPage;
 use DBObjectSearch;
 use DBObjectSet;
 use DBSearch;
@@ -34,7 +34,6 @@ use FunctionExpression;
 use IssueLog;
 use iTopExtension;
 use iTopExtensionsMap;
-use Combodo\iTop\Application\WebPage\JsonPage;
 use LogChannels;
 use MetaModel;
 use ormSet;
@@ -81,8 +80,14 @@ class AjaxRenderController
 			throw new Exception(Dict::Format('UI:Error:ReadNotAllowedOn_Class', $oSet->GetClass()));
 		}
 
+		$iCount = 0;
+		if (isset($aExtraParams['object_count'])) {
+			$iCount = $aExtraParams['object_count'];
+		} else {
+			$iCount = $oSet->Count();
+		}
 		$aResult["draw"] = $iDrawNumber;
-		$aResult["recordsTotal"] = $oSet->Count();
+		$aResult["recordsTotal"] = $iCount;
 		$aResult["recordsFiltered"] = $aResult["recordsTotal"] ;
 		$aResult["data"] = [];
 		while ($aObject = $oSet->FetchAssoc()) {
@@ -916,7 +921,7 @@ EOF
 		if (file_exists(APPROOT.'extensions')) {
 			$aSearchDirs[] = APPROOT.'extensions';
 		}
-		$sExtraDir = APPROOT.'data/'.$sCurrEnv.'-modules/';
+		$sExtraDir = utils::GetDataPath().$sCurrEnv.'-modules/';
 		if (file_exists($sExtraDir)) {
 			$aSearchDirs[] = $sExtraDir;
 		}
@@ -957,7 +962,7 @@ EOF
 		$oPage->add('<ul style="margin: 0;">');
 
 		require_once(APPROOT.'setup/extensionsmap.class.inc.php');
-		$oExtensionsMap = new iTopExtensionsMap();
+		$oExtensionsMap = iTopExtensionsMap::GetExtensionsMap();
 		$oExtensionsMap->LoadChoicesFromDatabase(MetaModel::GetConfig());
 		$aChoices = $oExtensionsMap->GetChoices();
 		foreach ($aChoices as $oExtension) {
@@ -1031,10 +1036,10 @@ EOF
 			if ($sModuleId == '_Root_') {
 				continue;
 			}
-			if ($aModuleData['version_db'] == '') {
+			if ($aModuleData['installed_version'] == '') {
 				continue;
 			}
-			$oPage->add('InstalledModule/'.$sModuleId.': '.$aModuleData['version_db']."\n");
+			$oPage->add('InstalledModule/'.$sModuleId.': '.$aModuleData['installed_version']."\n");
 		}
 
 		$oPage->add('===== end =====');

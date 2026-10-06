@@ -1,4 +1,4 @@
-teemIP - version 3.2.4 - 2026-08-26
+teemIP - version 3.3.0 - 2026-10-06
 Readme file
 
 1.   ABOUT THIS RELEASE
@@ -8,7 +8,7 @@ Readme file
 
 1. ABOUT THIS RELEASE
    ==================
-Thank you for downloading the 41st packaged release of teemIP. This is the product version of release 3.2.4.
+Thank you for downloading the 42nd packaged release of teemIP. This is the product version of release 3.3.0.
 
 teemIP's documentation can be found at: https://wiki.teemip.com.
 iTop's documentation is available as a Wiki at: https://www.itophub.io/wiki/page.
@@ -35,10 +35,10 @@ For installation instructions, please refer to: https://wiki.teemip.com/doku.php
 
 3. FEATURES
    ========
-teemIP 3.2.4 supports all the new features brought by iTop 3.2.3-2 and has been adapted to it.
-iTop new features are documented at https://www.itophub.io/wiki/page?id=3_2_0:release:whats_new
+teemIP 3.3.0 supports all the new features brought by iTop 3.3.0 and has been adapted to it.
+iTop new features are documented at https://www.itophub.io/wiki/page?id=3_3_0:release:whats_new
 
-In what IP Management is concerned, please refer to: https://wiki.teemip.net/doku.php?id=download:whatsnew#section323
+In what IP Management is concerned, please refer to: https://wiki.teemip.net/doku.php?id=download:whatsnew#section330
 
 Localization
 ------------

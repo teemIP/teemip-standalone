@@ -22,6 +22,7 @@ use Combodo\iTop\Application\EventRegister\ApplicationEvents;
 use Combodo\iTop\Core\MetaModel\FriendlyNameType;
 use Combodo\iTop\Service\Events\EventData;
 use Combodo\iTop\Service\Events\EventService;
+use Combodo\iTop\Setup\ModuleDiscovery\ModuleFileReader;
 
 require_once APPROOT.'core/modulehandler.class.inc.php';
 require_once APPROOT.'core/querymodifier.class.inc.php';
@@ -128,7 +129,7 @@ abstract class MetaModel
 	/** @var array */
 	private static $m_aClassToFile = [];
 	/** @var string */
-	protected static $m_sEnvironment = 'production';
+	protected static $m_sEnvironment = ITOP_DEFAULT_ENV;
 
 	/**
 	 * Objects currently created/updated.
@@ -395,6 +396,32 @@ abstract class MetaModel
 		return null;
 	}
 
+	final public static function GetDefaultWorkingTime()
+	{
+		return 'DefaultWorkingTimeComputer';
+	}
+
+	/**
+	 * @param string $sClass
+	 *
+	 * @return string the working time class
+	 * @throws \CoreException
+	 * @since 3.3.0
+	 */
+	final public static function GetWorkingTime($sClass)
+	{
+		self::_check_subclass($sClass);
+
+		if (array_key_exists('working_time', self::$m_aClassParams[$sClass])) {
+			return self::$m_aClassParams[$sClass]['working_time'];
+		} else {
+			$sParentClass = self::GetParentPersistentClass($sClass);
+			if (strlen($sParentClass) > 0) {
+				return self::GetWorkingTime($sParentClass);
+			}
+		}
+		return self::GetDefaultWorkingTime();
+	}
 	/**
 	 * @param string $sClass
 	 *
@@ -434,6 +461,43 @@ abstract class MetaModel
 		self::_check_subclass($sClass);
 
 		return call_user_func([$sClass, 'GetClassDescription'], $sClass);
+	}
+
+	/**
+	 * @param string $sClass
+	 *
+	 * @return string
+	 * @throws \CoreException
+	 */
+	final public static function GetModuleName($sClass)
+	{
+		try {
+			$oReflectionClass = new ReflectionClass($sClass);
+			$sDir = realpath(dirname($oReflectionClass->getFileName()));
+			$sApproot = realpath(APPROOT);
+			while (($sDir !== $sApproot) && (str_contains($sDir, $sApproot))) {
+				$aFiles = glob("$sDir/module.*.php");
+				if (count($aFiles) > 1) {
+					return 'core';
+				}
+
+				if (count($aFiles) == 0) {
+					$sDir = realpath(dirname($sDir));
+					continue;
+				}
+
+				$sModuleFilePath = $aFiles[0];
+				$aModuleInfo = ModuleFileReader::GetInstance()->ReadModuleFileInformation($sModuleFilePath);
+				$sModuleId = $aModuleInfo[ModuleFileReader::MODULE_INFO_ID];
+				list($sModuleName, ) = ModuleDiscovery::GetModuleName($sModuleId);
+
+				return $sModuleName;
+			}
+		} catch (\Exception $e) {
+			throw new CoreException("Cannot find class module", ['class' => $sClass], '', $e);
+		}
+
+		return 'core';
 	}
 
 	/**
@@ -1108,22 +1172,6 @@ abstract class MetaModel
 		return self::$m_aAttribOrigins[$sClass][$sAttCode];
 	}
 
-	/**     *
-	 * @param string $sClass
-	 * @param string $sAttCode
-	 *
-	 * @return mixed
-	 * @throws \CoreException
-	 */
-	final public static function GetFilterCodeOrigin($sClass, $sAttCode)
-	{
-		if ($sAttCode == 'id') {
-			return MetaModel::GetRootClass($sClass);
-		}
-
-		return MetaModel::GetAttributeOrigin($sClass, self::$m_aFilterAttribList[$sClass][$sAttCode]);
-	}
-
 	/**
 	 * @param string $sClass
 	 * @param string $sAttCode
@@ -1478,9 +1526,21 @@ abstract class MetaModel
 	 */
 	final public static function GetFiltersList($sClass)
 	{
-		self::_check_subclass($sClass);
-
-		return array_keys(self::$m_aFilterAttribList[$sClass]);
+		$aFilterList = MetaModel::GetAttributesList($sClass);
+		if (array_key_exists($sClass, self::$m_aFilterForbiddenAttributes)) {
+			// Remove the attributes that are not allowed in filters
+			foreach (self::$m_aFilterForbiddenAttributes[$sClass] as $sAttCode) {
+				if (array_key_exists($sAttCode, $aFilterList)) {
+					unset($aFilterList[$sAttCode]);
+				}
+			}
+		}
+		if (array_key_exists($sClass, self::$m_aMagicFields)) {
+			// Add the magic fields
+			$aFilterList = array_merge($aFilterList, self::$m_aMagicFields[$sClass]);
+		}
+		$aFilterList[] = 'id';
+		return $aFilterList;
 	}
 
 	/**
@@ -1579,11 +1639,16 @@ abstract class MetaModel
 	 */
 	final public static function IsValidFilterCode($sClass, $sFilterCode)
 	{
-		if (!array_key_exists($sClass, self::$m_aFilterAttribList)) {
+		if ($sFilterCode == 'id') {
+			return true;
+		}
+		if (array_key_exists($sClass, self::$m_aMagicFields) && in_array($sFilterCode, self::$m_aMagicFields[$sClass])) {
+			return true;
+		}
+		if (array_key_exists($sClass, self::$m_aFilterForbiddenAttributes) && in_array($sFilterCode, self::$m_aFilterForbiddenAttributes[$sClass])) {
 			return false;
 		}
-
-		return (array_key_exists($sFilterCode, self::$m_aFilterAttribList[$sClass]));
+		return self::IsValidAttCode($sClass, $sFilterCode);
 	}
 
 	/**
@@ -1853,54 +1918,14 @@ abstract class MetaModel
 	}
 
 	/**
-	 * @var array array of (FilterCode => AttributeCode)
+	 * @var array array of MagicFieldName
 	 */
-	private static $m_aFilterAttribList = [];
+	private static $m_aMagicFields = [];
 
 	/**
-	 * @deprecated 3.0.0 do not use : dead code, will be removed in the future N°4690 - Deprecate "FilterCodes"
-	 * instead of array_keys(MetaModel::GetClassFilterDefs($sClass)); use MetaModel::GetFiltersList($sClass)
-	 *
-	 * @param string $sClass
-	 *
-	 * @return mixed
-	 * @throws \CoreException
+	 * @var array array of filter Forbidden Attributes
 	 */
-	public static function GetClassFilterDefs($sClass)
-	{
-		// cannot notify depreciation for now as this is still MASSIVELY used in iTop core !
-		DeprecatedCallsLog::NotifyDeprecatedPhpMethod('do not use MetaModel::GetClassFilterDefs: dead code, will be removed in the future. Use MetaModel::GetFiltersList or MetaModel::GetFiltersAttributes');
-
-		return self::$m_aFilterAttribList[$sClass];
-	}
-
-	/**
-	 *
-	 * @param string $sClass
-	 *
-	 * @return array ($sFilterCode=>$sAttributeCode) + id=>id
-	 * @throws \CoreException
-	 */
-	public static function GetFilterAttribList($sClass)
-	{
-		return self::$m_aFilterAttribList[$sClass];
-	}
-
-	/**
-	 * @deprecated 3.0.0 do not use : dead code, will be removed in the future use GetLabel instead N°4690 - Deprecate "FilterCodes"
-	 *
-	 * @param string $sClass
-	 * @param string $sFilterCode
-	 *
-	 * @return string
-	 * @throws \CoreException
-	 */
-	public static function GetFilterLabel($sClass, $sFilterCode)
-	{
-		DeprecatedCallsLog::NotifyDeprecatedPhpMethod('do not use MetaModel::GetFilterLabel : dead code, will be removed in the future. Use MetaModel::GetLabel instead');
-
-		return this::GetLabel($sClass, $sFilterCode);
-	}
+	private static $m_aFilterForbiddenAttributes = [];
 
 	/**
 	 * @var array array of ("listcode" => various info on the list, common to every classes)
@@ -2088,53 +2113,6 @@ abstract class MetaModel
 	 * @var array
 	 */
 	private static $m_aRelationInfos = [];
-
-	/**
-	 * @deprecated Use EnumRelationsEx instead
-	 *
-	 * @param string $sClass
-	 *
-	 * @return array multitype:string unknown |Ambigous <string, multitype:>
-	 * @throws \CoreException
-	 * @throws \Exception
-	 * @throws \OQLException
-	 */
-	public static function EnumRelations($sClass = '')
-	{
-		DeprecatedCallsLog::NotifyDeprecatedPhpMethod('Use EnumRelationsEx instead');
-		$aResult = array_keys(self::$m_aRelationInfos);
-		if (!empty($sClass)) {
-			// Return only the relations that have a meaning (i.e. for which at least one query is defined)
-			// for the specified class
-			$aClassRelations = [];
-			foreach ($aResult as $sRelCode) {
-				$aQueriesDown = self::EnumRelationQueries($sClass, $sRelCode);
-				if (count($aQueriesDown) > 0) {
-					$aClassRelations[] = $sRelCode;
-				}
-				// Temporary patch: until the impact analysis GUI gets rewritten,
-				// let's consider that "depends on" is equivalent to "impacts/up"
-				// The current patch has been implemented in DBObject and MetaModel
-				if ($sRelCode == 'impacts') {
-					$aQueriesUp = self::EnumRelationQueries($sClass, 'impacts', false);
-					if (count($aQueriesUp) > 0) {
-						$aClassRelations[] = 'depends on';
-					}
-				}
-			}
-
-			return $aClassRelations;
-		}
-
-		// Temporary patch: until the impact analysis GUI gets rewritten,
-		// let's consider that "depends on" is equivalent to "impacts/up"
-		// The current patch has been implemented in DBObject and MetaModel
-		if (in_array('impacts', $aResult)) {
-			$aResult[] = 'depends on';
-		}
-
-		return $aResult;
-	}
 
 	/**
 	 * @param string $sClass
@@ -2712,24 +2690,6 @@ abstract class MetaModel
 	}
 
 	/**
-	 * @deprecated 3.1.0 use GetAllowedValues_att  N°4690 - Deprecate "FilterCodes"
-	 *
-	 * @param string $sClass
-	 * @param string $sFltCode
-	 * @param array $aArgs
-	 * @param string $sContains
-	 *
-	 * @return mixed
-	 * @throws \CoreException
-	 */
-	public static function GetAllowedValues_flt($sClass, $sFltCode, $aArgs = [], $sContains = '')
-	{
-		DeprecatedCallsLog::NotifyDeprecatedPhpMethod('do not use MetaModel::GetAllowedValues_flt: dead code, will be removed in the future. Use MetaModel::GetAllowedValues');
-
-		return self::GetAllowedValues_att($sClass, $sFltCode);
-	}
-
-	/**
 	 * @param string $sClass
 	 * @param string $sAttCode
 	 * @param array $aArgs
@@ -2797,8 +2757,6 @@ abstract class MetaModel
 		$oAttribute->SetHostClass($sTargetClass);
 		self::$m_aAttribDefs[$sTargetClass][$sCode] = $oAttribute;
 		self::$m_aAttribOrigins[$sTargetClass][$sCode] = $sOriginClass;
-
-		self::$m_aFilterAttribList[$sTargetClass][$sCode] = $sCode;
 	}
 
 	/**
@@ -2937,9 +2895,6 @@ abstract class MetaModel
 				if (array_key_exists('finalclass', self::$m_aAttribDefs[$sChildClass])) {
 					throw new CoreException("Class $sChildClass, 'finalclass' is a reserved keyword, it cannot be used as an attribute code");
 				}
-				if (array_key_exists('finalclass', self::$m_aFilterAttribList[$sChildClass])) {
-					throw new CoreException("Class $sChildClass, 'finalclass' is a reserved keyword, it cannot be used as a filter code");
-				}
 				$oCloned = clone $oClassAtt;
 				$oCloned->SetFixedValue($sChildClass);
 				self::AddMagicAttribute($oCloned, $sChildClass, $sRootClass);
@@ -3003,8 +2958,18 @@ abstract class MetaModel
 			foreach (self::$m_aAttribDefs[$sClass] as $sAttCode => $oAttDef) {
 				// Compute the filter codes
 				//
-				foreach ($oAttDef->GetFilterDefinitions() as $sFilterCode => $sCode) {
-					self::$m_aFilterAttribList[$sClass][$sFilterCode] = $sCode;
+				foreach ($oAttDef->GetMagicFields() as $sCode) {
+					if (!array_key_exists($sClass, self::$m_aMagicFields)) {
+						self::$m_aMagicFields[] = $sClass;
+					}
+					self::$m_aMagicFields[$sClass][] = $sCode;
+					self::$m_aAttribOrigins[$sClass][$sCode] = self::$m_aAttribOrigins[$sClass][$sAttCode];
+				}
+				if (!$oAttDef->IsValidFilterAttribute()) {
+					if (!array_key_exists($sClass, self::$m_aFilterForbiddenAttributes)) {
+						self::$m_aFilterForbiddenAttributes[] = $sClass;
+					}
+					self::$m_aFilterForbiddenAttributes[$sClass][] = $sAttCode;
 				}
 
 				// Compute the fields that will be used to display a pointer to another object
@@ -3109,7 +3074,6 @@ abstract class MetaModel
 			if (array_key_exists('id', self::$m_aAttribDefs[$sClass])) {
 				throw new CoreException("Class $sClass, 'id' is a reserved keyword, it cannot be used as an attribute code");
 			}
-			self::$m_aFilterAttribList[$sClass]['id'] = 'id';
 		}
 	}
 
@@ -3250,7 +3214,6 @@ abstract class MetaModel
 
 		self::$m_aAttribDefs[$sClass] = [];
 		self::$m_aAttribOrigins[$sClass] = [];
-		self::$m_aFilterAttribList[$sClass] = [];
 	}
 
 	/**
@@ -3962,12 +3925,12 @@ abstract class MetaModel
 						$aScalarArgs[$sArgName] = null;
 					} elseif (is_array($value)) {
 						$aScalarArgs[$sArgName] = $value;
-                    } elseif (is_object($value)) {
-                        // teemIP addition made to solve import bug. See bug 7497
-                        if (method_exists($value, 'ToString')) {
-                            $aScalarArgs[$sArgName] = $value->ToString();
-                        }
-                    }
+					} elseif (is_object($value)) {
+						// teemIP addition made to solve import bug. See bug 7497
+						if (method_exists($value, 'ToString')) {
+							$aScalarArgs[$sArgName] = $value->ToString();
+						}
+					}
 				}
 			}
 			return static::AddMagicPlaceholders($aScalarArgs, $aExpectedArgs);
@@ -4702,12 +4665,15 @@ abstract class MetaModel
 	 * @throws \CoreException
 	 * @throws \MySQLException
 	 */
-	public static function DBExists($bMustBeComplete = true)
+	public static function DBExists($bMustBeComplete = true, ?string $sDBName = null)
 	{
-		if (!CMDBSource::IsDB(self::$m_sDBName)) {
+		if (is_null($sDBName)) {
+			$sDBName = self::$m_sDBName;
+		}
+		if (!CMDBSource::IsDB($sDBName)) {
 			return false;
 		}
-		CMDBSource::SelectDB(self::$m_sDBName);
+		CMDBSource::SelectDB($sDBName);
 
 		$aFound = [];
 		$aMissing = [];
@@ -4804,7 +4770,7 @@ abstract class MetaModel
 	 */
 	protected static function DBCreateViews()
 	{
-		[$aErrors, $aSugFix] = self::DBCheckViews();
+		[$aErrors, $aSugFix] = self::DBCleanLegacyViews();
 
 		foreach ($aSugFix as $sClass => $aTarget) {
 			foreach ($aTarget as $aQueries) {
@@ -5336,15 +5302,15 @@ abstract class MetaModel
 	}
 
 	/**
-	 * @deprecated 2.7.0 N°2369 Method will not be removed any time soon as we still need to drop view if the instance is migrating from an iTop 2.x to an iTop 3.0 or newer, even if they skip iTop 3.0.
-	 * @since 3.0.0 Does not recreate SQL views, only drops them. Method has not been renamed to avoid regressions
+	 * @internal
+	 * @deprecated will be remove when 2.7 will not be supported anymore
 	 *
 	 * @return array
 	 * @throws \CoreException
 	 * @throws \Exception
 	 * @throws \MissingQueryArgument
 	 */
-	public static function DBCheckViews()
+	public static function DBCleanLegacyViews()
 	{
 		$aErrors = [];
 		$aSugFix = [];
@@ -5790,7 +5756,7 @@ abstract class MetaModel
 	 * @throws \DictExceptionUnknownLanguage
 	 * @throws \Exception
 	 */
-	public static function Startup($config, $bModelOnly = false, $bAllowCache = true, $bTraceSourceFiles = false, $sEnvironment = 'production')
+	public static function Startup($config, $bModelOnly = false, $bAllowCache = true, $bTraceSourceFiles = false, $sEnvironment = ITOP_DEFAULT_ENV)
 	{
 		// Startup on a new environment is not supported
 		static $bStarted = false;
@@ -5801,36 +5767,37 @@ abstract class MetaModel
 
 		self::$m_sEnvironment = $sEnvironment;
 
-		try {
-			if (!defined('MODULESROOT')) {
-				define('MODULESROOT', APPROOT.'env-'.self::$m_sEnvironment.'/');
+		if (!defined('MODULESROOT')) {
+			define('MODULESROOT', APPROOT.'env-'.self::$m_sEnvironment.'/');
 
-				self::$m_bTraceSourceFiles = $bTraceSourceFiles;
+			self::$m_bTraceSourceFiles = $bTraceSourceFiles;
 
-				// $config can be either a filename, or a Configuration object (volatile!)
-				if ($config instanceof Config) {
-					self::LoadConfig($config, $bAllowCache);
-				} else {
-					self::LoadConfig(new Config($config), $bAllowCache);
-				}
-
-				if ($bModelOnly) {
-					return;
-				}
+			// $config can be either a filename, or a Configuration object (volatile!)
+			if ($config instanceof Config) {
+				self::LoadConfig($config, $bAllowCache);
+			} else {
+				self::LoadConfig(new Config($config), $bAllowCache);
 			}
 
-			CMDBSource::SelectDB(self::$m_sDBName);
-
-			foreach (MetaModel::EnumPlugins('ModuleHandlerApiInterface') as $oPHPClass) {
-				$oPHPClass::OnMetaModelStarted();
+			if ($bModelOnly) {
+				// Event service must be initialized after the MetaModel startup, otherwise it cannot discover classes implementing the iEventServiceSetup interface
+				EventService::InitService();
+				EventService::FireEvent(new EventData(ApplicationEvents::APPLICATION_EVENT_METAMODEL_STARTED));
+				return;
 			}
-
-			ExpressionCache::Warmup();
-		} finally {
-			// Event service must be initialized after the MetaModel startup, otherwise it cannot discover classes implementing the iEventServiceSetup interface
-			EventService::InitService();
-			EventService::FireEvent(new EventData(ApplicationEvents::APPLICATION_EVENT_METAMODEL_STARTED));
 		}
+
+		CMDBSource::SelectDB(self::$m_sDBName);
+
+		foreach (MetaModel::EnumPlugins('ModuleHandlerApiInterface') as $oPHPClass) {
+			$oPHPClass::OnMetaModelStarted();
+		}
+
+		ExpressionCache::Warmup();
+
+		// Event service must be initialized after the MetaModel startup, otherwise it cannot discover classes implementing the iEventServiceSetup interface
+		EventService::InitService();
+		EventService::FireEvent(new EventData(ApplicationEvents::APPLICATION_EVENT_METAMODEL_STARTED));
 	}
 
 	/**
@@ -5938,7 +5905,8 @@ abstract class MetaModel
 				self::$m_aAttribDefs = $result['m_aAttribDefs'];
 				self::$m_aAttribOrigins = $result['m_aAttribOrigins'];
 				self::$m_aIgnoredAttributes = $result['m_aIgnoredAttributes'];
-				self::$m_aFilterAttribList = $result['m_aFilterList'];
+				self::$m_aFilterForbiddenAttributes = $result['m_aFilterForbiddenAttributes'];
+				self::$m_aMagicFields = $result['m_aMagicFields'];
 				self::$m_aListInfos = $result['m_aListInfos'];
 				self::$m_aListData = $result['m_aListData'];
 				self::$m_aRelationInfos = $result['m_aRelationInfos'];
@@ -5972,7 +5940,8 @@ abstract class MetaModel
 				$aCache['m_aAttribDefs'] = self::$m_aAttribDefs; // array of ("classname" => array of attributes)
 				$aCache['m_aAttribOrigins'] = self::$m_aAttribOrigins; // array of ("classname" => array of ("attcode"=>"sourceclass"))
 				$aCache['m_aIgnoredAttributes'] = self::$m_aIgnoredAttributes; //array of ("classname" => array of ("attcode")
-				$aCache['m_aFilterList'] = self::$m_aFilterAttribList; // array of ("classname" => array filterdef)
+				$aCache['m_aFilterForbiddenAttributes'] = self::$m_aFilterForbiddenAttributes; // array of ("classname" => array attributename)
+				$aCache['m_aMagicFields'] = self::$m_aMagicFields; // array of ("classname" => array fieldname)
 				$aCache['m_aListInfos'] = self::$m_aListInfos; // array of ("listcode" => various info on the list, common to every classes)
 				$aCache['m_aListData'] = self::$m_aListData; // array of ("classname" => array of "listcode" => list)
 				$aCache['m_aRelationInfos'] = self::$m_aRelationInfos; // array of ("relcode" => various info on the list, common to every classes)
@@ -6902,10 +6871,24 @@ abstract class MetaModel
 		require_once(APPROOT.'/core/dict.class.inc.php');
 		Dict::ResetCache($sAppIdentity);
 
+		$iApcDeleteFailureCount = 0;
 		if (function_exists('apc_delete')) {
 			foreach (self::GetCacheEntries($sEnvironmentId) as $sKey => $aAPCInfo) {
 				$sAPCKey = $aAPCInfo['info'];
-				apc_delete($sAPCKey);
+				if (!apc_delete($sAPCKey)) {
+					$iApcDeleteFailureCount++;
+				}
+			}
+		}
+
+		if ($iApcDeleteFailureCount > 0) {
+			SetupLog::Warning("apc_delete failed for $iApcDeleteFailureCount entries for env $sEnvironment");
+		}
+
+		if (function_exists('apc_clear_cache')) {
+			// old style APC
+			if (!apc_clear_cache()) {
+				SetupLog::Warning("apc_clear_cache failed for env $sEnvironment");
 			}
 		}
 
@@ -6915,43 +6898,13 @@ abstract class MetaModel
 		// Reset the opcache since otherwise the PHP "model" files may still be cached !!
 		if (function_exists('opcache_reset')) {
 			// Zend opcode cache
-			opcache_reset();
+			if (!opcache_reset()) {
+				SetupLog::Warning("opcache_reset failed for env $sEnvironment");
+			}
 		}
 
 		require_once(APPROOT.'setup/setuputils.class.inc.php');
 		SetupUtils::rrmdir(utils::GetCachePath($sEnvironment));
-	}
-
-	/**
-	 * @internal
-	 * @param string $sEnvironmentId
-	 * @deprecated 3.2.1
-	 */
-	public static function ResetCache($sEnvironmentId = null)
-	{
-		if (is_null($sEnvironmentId)) {
-			$sEnvironmentId = MetaModel::GetEnvironmentId();
-		}
-
-		$sAppIdentity = 'itop-'.$sEnvironmentId;
-		require_once(APPROOT.'/core/dict.class.inc.php');
-		Dict::ResetCache($sAppIdentity);
-
-		if (function_exists('apc_delete')) {
-			foreach (self::GetCacheEntries($sEnvironmentId) as $sKey => $aAPCInfo) {
-				$sAPCKey = $aAPCInfo['info'];
-				apc_delete($sAPCKey);
-			}
-		}
-
-		require_once(APPROOT.'core/userrights.class.inc.php');
-		UserRights::FlushPrivileges();
-
-		// Reset the opcache since otherwise the PHP "model" files may still be cached !!
-		if (function_exists('opcache_reset')) {
-			// Zend opcode cache
-			opcache_reset();
-		}
 	}
 
 	/**
@@ -7104,9 +7057,7 @@ abstract class MetaModel
 			'iLoginUIExtension',
 			'iPreferencesExtension',
 			'iApplicationUIExtension',
-			'iApplicationObjectExtension',
 			'iPopupMenuExtension',
-			'iPageUIExtension',
 			'iPageUIBlockExtension',
 			'iBackofficeLinkedScriptsExtension',
 			'iBackofficeEarlyScriptExtension',
@@ -7115,6 +7066,7 @@ abstract class MetaModel
 			'iBackofficeReadyScriptExtension',
 			'iBackofficeLinkedStylesheetsExtension',
 			'iBackofficeStyleExtension',
+			'iBackofficeSassExtension',
 			'iBackofficeDictEntriesExtension',
 			'iBackofficeDictEntriesPrefixesExtension',
 			'iPortalUIExtension',
@@ -7123,7 +7075,6 @@ abstract class MetaModel
 			'iModuleExtension',
 			'iKPILoggerExtension',
 			'ModuleHandlerApiInterface',
-			'iNewsroomProvider',
 		];
 		foreach ($aInterfaces as $sInterface) {
 			self::$m_aExtensionClassNames[$sInterface] = [];
