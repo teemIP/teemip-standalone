@@ -80,21 +80,25 @@
                 <title>Menu:ConfigManagement:TeemIpNetworking</title>
                 <icon>teemip-ip-mgmt/asset/img/icons8-internet-folder-48.png</icon>
               </dashlet>
-              <dashlet id="teemip-1.1" xsi:type="DashletBadge">
-                <rank>1</rank>
+              <dashlet id="interface" xsi:type="DashletBadge">
+                <rank>10</rank>
+                <class>NetworkInterface</class>
+              </dashlet>
+              <dashlet id="wan" xsi:type="DashletBadge">
+                <rank>20</rank>
                 <class>WANLink</class>
               </dashlet>
-              <dashlet id="teemip-1.2" xsi:type="DashletBadge">
-                <rank>2</rank>
+              <dashlet id="vpn" xsi:type="DashletBadge">
+                <rank>30</rank>
+                <class>VPNLink</class>
+              </dashlet>
+              <dashlet id="vlan" xsi:type="DashletBadge">
+                <rank>40</rank>
                 <class>VLAN</class>
               </dashlet>
-              <dashlet id="teemip-1.3" xsi:type="DashletBadge">
-                <rank>3</rank>
+              <dashlet id="domain" xsi:type="DashletBadge">
+                <rank>50</rank>
                 <class>Domain</class>
-              </dashlet>
-              <dashlet id="teemip-1.4" xsi:type="DashletBadge">
-                <rank>4</rank>
-                <class>NetworkInterface</class>
               </dashlet>
             </dashlets>
           </cell>
