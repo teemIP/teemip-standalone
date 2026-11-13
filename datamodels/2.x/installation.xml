@@ -175,7 +175,7 @@
         </step>
         <step>
             <title>Request Management options</title>
-            <description><![CDATA[<h2>Decide whether you want to include a Helpdesk in TeemIP.</h2>]]></description>
+            <description><![CDATA[<h2>Decide whether you want to include a Helpdesk in teemIP.</h2>]]></description>
             <banner>/datamodels/2.x/teemip-ip-request-mgmt/teemip-request-mgmt/asset/img/iprequest.png</banner>
             <alternatives type="array">
                 <choice>
