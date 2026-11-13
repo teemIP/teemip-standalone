@@ -130,7 +130,7 @@
                 <icon>teemip-ipv6-mgmt/asset/img/icons8-rj45v6-48.png</icon>
                 <query>SELECT IPv6Address</query>
                 <group_by>status</group_by>
-                <values>reserved,allocated,released,unassigned</values>
+                <values>reserved,allocated,released,unassigned,discovered</values>
               </dashlet>
             </dashlets>
            </cell>
